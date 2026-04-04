@@ -52,6 +52,52 @@ export function updatePuntoControl(idPuntoControl, payload) {
   });
 }
 
+export function getRutas() {
+  return requestJson(`${env.pythonApiUrl}/rutas`);
+}
+
+export function createRuta(payload) {
+  return requestJson(`${env.pythonApiUrl}/rutas`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateRuta(idRuta, payload) {
+  return requestJson(`${env.pythonApiUrl}/rutas/${idRuta}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteRuta(idRuta) {
+  return requestJson(`${env.pythonApiUrl}/rutas/${idRuta}`, {
+    method: "DELETE",
+  });
+}
+
+export function createRutaAsignacion(payload) {
+  return requestJson(`${env.pythonApiUrl}/seguimiento-rutas/asignaciones`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getRutaAsignaciones(idRuta) {
+  const suffix = idRuta ? `?id_ruta=${encodeURIComponent(idRuta)}` : "";
+  return requestJson(`${env.pythonApiUrl}/seguimiento-rutas/asignaciones${suffix}`);
+}
+
+export function getSeguimientoRuta(idRuta, idCamion) {
+  const params = new URLSearchParams({ id_ruta: idRuta, id_camion: idCamion });
+  return requestJson(`${env.pythonApiUrl}/seguimiento-rutas?${params.toString()}`);
+}
+
+export function getMetricasRuta(idRuta) {
+  const params = new URLSearchParams({ id_ruta: idRuta });
+  return requestJson(`${env.pythonApiUrl}/metricas-rutas?${params.toString()}`);
+}
+
 export function getMovimientosAcceso() {
   return requestJson(`${env.pythonApiUrl}/movimientos-acceso`);
 }

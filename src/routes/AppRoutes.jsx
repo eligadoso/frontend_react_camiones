@@ -5,7 +5,9 @@ import { MainLayout } from "../components/layout/MainLayout";
 import { DataManagementPage } from "../pages/DataManagementPage";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
+import { RouteMetricsPage } from "../pages/RouteMetricsPage";
 import { PythonApiPage } from "../pages/PythonApiPage";
+import { RouteTrackingPage } from "../pages/RouteTrackingPage";
 import { WebhookPage } from "../pages/WebhookPage";
 
 export function AppRoutes() {
@@ -48,6 +50,26 @@ export function AppRoutes() {
           <ProtectedRoute>
             <MainLayout>
               <PythonApiPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/seguimiento-rutas"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <RouteTrackingPage />
+            </MainLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/metricas-rutas"
+        element={
+          <ProtectedRoute>
+            <MainLayout>
+              <RouteMetricsPage />
             </MainLayout>
           </ProtectedRoute>
         }

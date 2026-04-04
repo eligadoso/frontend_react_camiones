@@ -10,6 +10,8 @@ export function MainLayout({ children }) {
     { to: "/", label: "Inicio" },
     { to: "/webhook", label: "Historial" },
     { to: "/gestion-datos", label: "Gestión Tags RFID" },
+    { to: "/seguimiento-rutas", label: "Seguimiento Rutas" },
+    { to: "/metricas-rutas", label: "Métricas Rutas" },
     { to: "/backend", label: "Pruebas API" },
   ];
 

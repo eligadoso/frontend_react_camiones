@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 
 import {
+  createRuta,
   createCamion,
   createConductor,
   createVinculacion,
+  deleteRuta,
   getCamiones,
   getConductores,
   getPuntosControl,
+  getRutas,
   getTags,
   updatePuntoControl,
+  updateRuta,
   updateTag,
 } from "../api/operationsApi";
 
@@ -17,6 +21,7 @@ export function DataManagementPage() {
   const [conductores, setConductores] = useState([]);
   const [tags, setTags] = useState([]);
   const [puntosControl, setPuntosControl] = useState([]);
+  const [rutas, setRutas] = useState([]);
   const [status, setStatus] = useState("");
   const [conductorForm, setConductorForm] = useState({
     rut: "",
@@ -47,8 +52,20 @@ export function DataManagementPage() {
     nombre: "",
     tipo_punto: "checkpoint",
     ubicacion: "",
+    cordenadas: "",
     id_zona: "",
     activo: true,
+  });
+  const [rutaForm, setRutaForm] = useState({
+    id_ruta: "",
+    nombre: "",
+    descripcion: "",
+    activa: true,
+    puntos: [],
+  });
+  const [rutaPuntoForm, setRutaPuntoForm] = useState({
+    id_punto_control: "",
+    orden: 1,
   });
 
   const loadData = () => {
@@ -56,6 +73,7 @@ export function DataManagementPage() {
     getConductores().then((result) => setConductores(result.data || [])).catch(() => undefined);
     getTags().then((result) => setTags(result.data || [])).catch(() => undefined);
     getPuntosControl().then((result) => setPuntosControl(result.data || [])).catch(() => undefined);
+    getRutas().then((result) => setRutas(result.data || [])).catch(() => undefined);
   };
 
   useEffect(() => {
@@ -105,6 +123,7 @@ export function DataManagementPage() {
         nombre: "",
         tipo_punto: "checkpoint",
         ubicacion: "",
+        cordenadas: "",
         id_zona: "",
         activo: true,
       });
@@ -115,6 +134,7 @@ export function DataManagementPage() {
       nombre: punto.nombre || "",
       tipo_punto: punto.tipo_punto || "checkpoint",
       ubicacion: punto.ubicacion || "",
+      cordenadas: punto.cordenadas || "",
       id_zona: punto.id_zona || "",
       activo: punto.activo !== false,
     });
@@ -128,10 +148,86 @@ export function DataManagementPage() {
       nombre: puntoControlForm.nombre,
       tipo_punto: puntoControlForm.tipo_punto,
       ubicacion: puntoControlForm.ubicacion || null,
+      cordenadas: puntoControlForm.cordenadas || null,
       id_zona: puntoControlForm.id_zona || null,
       activo: puntoControlForm.activo,
     });
     setStatus("Punto de control actualizado");
+    loadData();
+  };
+
+  const onAddPuntoToRuta = () => {
+    if (!rutaPuntoForm.id_punto_control) {
+      return;
+    }
+    const orden = Number(rutaPuntoForm.orden) || 1;
+    const filtered = rutaForm.puntos.filter((p) => p.id_punto_control !== rutaPuntoForm.id_punto_control);
+    const next = [...filtered, { id_punto_control: rutaPuntoForm.id_punto_control, orden }];
+    next.sort((a, b) => a.orden - b.orden);
+    setRutaForm({ ...rutaForm, puntos: next });
+    setRutaPuntoForm({ id_punto_control: "", orden: orden + 1 });
+  };
+
+  const onRemovePuntoFromRuta = (idPuntoControl) => {
+    setRutaForm({
+      ...rutaForm,
+      puntos: rutaForm.puntos.filter((p) => p.id_punto_control !== idPuntoControl),
+    });
+  };
+
+  const onSelectRuta = (idRuta) => {
+    const ruta = rutas.find((item) => item.id_ruta === idRuta);
+    if (!ruta) {
+      setRutaForm({ id_ruta: "", nombre: "", descripcion: "", activa: true, puntos: [] });
+      return;
+    }
+    setRutaForm({
+      id_ruta: ruta.id_ruta,
+      nombre: ruta.nombre || "",
+      descripcion: ruta.descripcion || "",
+      activa: ruta.activa !== false,
+      puntos: (ruta.puntos || [])
+        .map((p) => ({ id_punto_control: p.id_punto_control, orden: p.orden }))
+        .sort((a, b) => a.orden - b.orden),
+    });
+  };
+
+  const onCreateRuta = async () => {
+    if (!rutaForm.nombre.trim()) {
+      return;
+    }
+    await createRuta({
+      nombre: rutaForm.nombre,
+      descripcion: rutaForm.descripcion || null,
+      activa: rutaForm.activa,
+      puntos: rutaForm.puntos,
+    });
+    setStatus("Ruta creada");
+    setRutaForm({ id_ruta: "", nombre: "", descripcion: "", activa: true, puntos: [] });
+    loadData();
+  };
+
+  const onUpdateRuta = async () => {
+    if (!rutaForm.id_ruta) {
+      return;
+    }
+    await updateRuta(rutaForm.id_ruta, {
+      nombre: rutaForm.nombre,
+      descripcion: rutaForm.descripcion || null,
+      activa: rutaForm.activa,
+      puntos: rutaForm.puntos,
+    });
+    setStatus("Ruta actualizada");
+    loadData();
+  };
+
+  const onDeleteRuta = async () => {
+    if (!rutaForm.id_ruta) {
+      return;
+    }
+    await deleteRuta(rutaForm.id_ruta);
+    setStatus("Ruta eliminada");
+    setRutaForm({ id_ruta: "", nombre: "", descripcion: "", activa: true, puntos: [] });
     loadData();
   };
 
@@ -313,6 +409,12 @@ export function DataManagementPage() {
           />
           <input
             type="text"
+            placeholder="Cordenadas"
+            value={puntoControlForm.cordenadas}
+            onChange={(event) => setPuntoControlForm({ ...puntoControlForm, cordenadas: event.target.value })}
+          />
+          <input
+            type="text"
             placeholder="ID Zona"
             value={puntoControlForm.id_zona}
             onChange={(event) => setPuntoControlForm({ ...puntoControlForm, id_zona: event.target.value })}
@@ -333,6 +435,89 @@ export function DataManagementPage() {
             <option value="false">inactivo</option>
           </select>
           <button onClick={onUpdatePuntoControl}>Actualizar punto</button>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h3>CRUD de rutas</h3>
+        <div className="row">
+          <select value={rutaForm.id_ruta} onChange={(event) => onSelectRuta(event.target.value)}>
+            <option value="">Nueva ruta</option>
+            {rutas.map((item) => (
+              <option key={item.id_ruta} value={item.id_ruta}>
+                {item.nombre}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            placeholder="Nombre de ruta"
+            value={rutaForm.nombre}
+            onChange={(event) => setRutaForm({ ...rutaForm, nombre: event.target.value })}
+          />
+          <input
+            type="text"
+            placeholder="Descripción"
+            value={rutaForm.descripcion}
+            onChange={(event) => setRutaForm({ ...rutaForm, descripcion: event.target.value })}
+          />
+          <select
+            value={rutaForm.activa ? "true" : "false"}
+            onChange={(event) => setRutaForm({ ...rutaForm, activa: event.target.value === "true" })}
+          >
+            <option value="true">activa</option>
+            <option value="false">inactiva</option>
+          </select>
+        </div>
+        <div className="row" style={{ marginTop: 12 }}>
+          <select
+            value={rutaPuntoForm.id_punto_control}
+            onChange={(event) => setRutaPuntoForm({ ...rutaPuntoForm, id_punto_control: event.target.value })}
+          >
+            <option value="">Selecciona punto de control</option>
+            {puntosControl.map((item) => (
+              <option key={item.id_punto_control} value={item.id_punto_control}>
+                {item.nombre || item.id_esp32}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            placeholder="Orden"
+            value={rutaPuntoForm.orden}
+            onChange={(event) => setRutaPuntoForm({ ...rutaPuntoForm, orden: event.target.value })}
+          />
+          <button onClick={onAddPuntoToRuta}>Agregar punto a ruta</button>
+        </div>
+        <table className="data-table" style={{ marginTop: 12 }}>
+          <thead>
+            <tr>
+              <th>Orden</th>
+              <th>Punto</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rutaForm.puntos.map((p) => {
+              const punto = puntosControl.find((item) => item.id_punto_control === p.id_punto_control);
+              return (
+                <tr key={`${p.id_punto_control}-${p.orden}`}>
+                  <td>{p.orden}</td>
+                  <td>{punto?.nombre || p.id_punto_control}</td>
+                  <td>
+                    <button className="secondary" onClick={() => onRemovePuntoFromRuta(p.id_punto_control)}>
+                      Quitar
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <div className="row" style={{ marginTop: 12 }}>
+          <button onClick={onCreateRuta}>Crear ruta</button>
+          <button className="secondary" onClick={onUpdateRuta}>Editar ruta</button>
+          <button className="secondary" onClick={onDeleteRuta}>Eliminar ruta</button>
         </div>
       </div>
 

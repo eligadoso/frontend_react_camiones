@@ -223,6 +223,86 @@ select {
   color: #b91c1c;
 }
 
+.timeline-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.timeline-node {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  text-align: left;
+  background: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+}
+
+.timeline-order {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #334155;
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.timeline-node.active {
+  border-color: #2563eb;
+  background: #dbeafe;
+}
+
+.timeline-node small {
+  color: #64748b;
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 340px 1fr 90px;
+  gap: 10px;
+  align-items: center;
+}
+
+.bar-label {
+  font-size: 12px;
+  color: #334155;
+}
+
+.bar-track {
+  height: 14px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #2563eb;
+}
+
+.bar-value {
+  font-size: 12px;
+  color: #1e293b;
+}
+
+.route-metrics-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 14px;
+}
+
 pre {
   background: #0f172a;
   color: #e2e8f0;
@@ -233,6 +313,14 @@ pre {
 
 @media (max-width: 1024px) {
   .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .route-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bar-row {
     grid-template-columns: 1fr;
   }
 }
