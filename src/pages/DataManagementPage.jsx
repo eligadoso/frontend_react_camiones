@@ -1166,12 +1166,14 @@ function RutasTab({ searchTerm }) {
     position: parseCoords(p.cp.cordenadas),
     label: `${p.orden}. ${p.cp.nombre || p.id_punto_control}`,
     title: `${p.orden}. ${p.cp.nombre || p.id_punto_control}`,
+    markerColor: "green",
   }));
 
   const routeSegments = formPuntosWithCoords.slice(0, -1).map((p, i) => ({
     start: parseCoords(p.cp.cordenadas),
     end: parseCoords(formPuntosWithCoords[i + 1].cp.cordenadas),
     status: "pending",
+    color: "#38bdf8",
   }));
 
   const validCps = checkpoints.filter((cp) => cp.activo !== false && parseCoords(cp.cordenadas));

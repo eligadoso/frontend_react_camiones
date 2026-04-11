@@ -1,3 +1,5 @@
+export { default } from "./HybridMapView";
+/*
 import { useEffect, useMemo, useRef } from "react";
 import { GoogleMap, MarkerF, PolylineF, useJsApiLoader } from "@react-google-maps/api";
 import { env } from "../config/env";
@@ -191,3 +193,4 @@ export default function GoogleMapView({
     </GoogleMap>
   );
 }
+*/

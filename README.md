@@ -13,6 +13,8 @@
 2. Ajusta:
    - `VITE_WEBHOOK_API_URL`
    - `VITE_PYTHON_API_URL`
+   - `VITE_GOOGLE_MAPS_API_KEY`
+   - `VITE_FORCE_FALLBACK_MAP` para probar el mapa alternativo con `true`
 
 ## Ejecución
 

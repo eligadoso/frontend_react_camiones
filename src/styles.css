@@ -107,3 +107,18 @@
     color: inherit;
   }
 }
+
+.map-marker-tooltip {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  border-radius: 9999px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+
+.map-marker-tooltip::before {
+  border-top-color: rgba(203, 213, 225, 0.95) !important;
+}

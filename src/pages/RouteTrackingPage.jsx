@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Clock, Truck, Calendar, Plus, X, CheckCircle2, Loader2 } from "lucide-react";
+import { Clock, Truck, Calendar, Plus, X, CheckCircle2, Loader2, Users } from "lucide-react";
 import {
   createRutaAsignacion,
   getCamiones,
@@ -105,10 +105,21 @@ export function RouteTrackingPage() {
       setSeguimiento(null);
       return;
     }
-    const load = () => {
-      getSeguimientoRuta(selectedRuta.id_ruta, selectedCamionId, selectedAsignacionId)
-        .then((r) => setSeguimiento(r.data || r || null))
-        .catch(() => undefined);
+    const load = async () => {
+      try {
+        const r = await getSeguimientoRuta(selectedRuta.id_ruta, selectedCamionId, selectedAsignacionId);
+        const data = r.data || r || null;
+        setSeguimiento(data);
+        // Si el backend marcó el recorrido como auto-completado, refrescar la lista
+        // de asignaciones para que el badge cambie de "En Progreso" a "Finalizado".
+        if (data?.auto_completado) {
+          getRutaAsignaciones(selectedRuta.id_ruta)
+            .then((res) => setAsignaciones(res.data || res || []))
+            .catch(() => undefined);
+        }
+      } catch {
+        // silencioso
+      }
     };
     load();
     const interval = setInterval(load, 5000);
@@ -375,14 +386,29 @@ export function RouteTrackingPage() {
               </motion.div>
             )}
 
-            {/* Lista de recorridos */}
+            {/* Lista de recorridos — filtrada por camión seleccionado */}
             <div className="divide-y divide-gray-100 max-h-64 overflow-auto">
-              {asignaciones.length === 0 ? (
-                <div className="p-6 text-center text-sm text-gray-400">
-                  {selectedRuta ? "Sin recorridos registrados" : "Selecciona una ruta"}
-                </div>
-              ) : (
-                asignaciones.map((a) => {
+              {(() => {
+                const visibles = selectedCamionId
+                  ? asignaciones.filter((a) => String(a.id_camion) === String(selectedCamionId))
+                  : asignaciones;
+                if (!selectedRuta) {
+                  return (
+                    <div className="p-6 text-center text-sm text-gray-400">
+                      Selecciona una ruta
+                    </div>
+                  );
+                }
+                if (visibles.length === 0) {
+                  return (
+                    <div className="p-6 text-center text-sm text-gray-400">
+                      {selectedCamionId
+                        ? "Sin recorridos para este camión"
+                        : "Sin recorridos registrados"}
+                    </div>
+                  );
+                }
+                return visibles.map((a) => {
                   const isSelected = selectedAsignacionId === a.id_asignacion_ruta;
                   return (
                     <button
@@ -422,9 +448,17 @@ export function RouteTrackingPage() {
                         )}
                       </div>
 
+                      {/* Conductor */}
+                      {a.conductor_nombre && (
+                        <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                          <Users className="size-3 shrink-0" />
+                          <span className="truncate">{a.conductor_nombre}</span>
+                        </div>
+                      )}
+
                       {/* Fecha de inicio */}
                       {a.hora_inicio && (
-                        <div className="mt-1.5 flex items-center gap-1 text-xs text-gray-500">
+                        <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
                           <Calendar className="size-3" />
                           <span>
                             {new Date(a.hora_inicio).toLocaleDateString("es-CL", {
@@ -445,8 +479,8 @@ export function RouteTrackingPage() {
                       )}
                     </button>
                   );
-                })
-              )}
+                });
+              })()}
             </div>
           </motion.div>
 
