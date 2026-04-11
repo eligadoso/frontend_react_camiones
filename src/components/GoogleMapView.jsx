@@ -1,4 +1,5 @@
-import { GoogleMap, useJsApiLoader, Marker, Polyline } from "@react-google-maps/api";
+import { useEffect, useMemo, useRef } from "react";
+import { GoogleMap, MarkerF, PolylineF, useJsApiLoader } from "@react-google-maps/api";
 import { env } from "../config/env";
 
 const mapContainerStyle = { width: "100%", height: "100%" };
@@ -32,19 +33,95 @@ export default function GoogleMapView({
   markers = [],
   routeSegments = [],
   onClick,
+  fitToData = false,
 }) {
   const apiKey = env.googleMapsApiKey;
+  const mapRef = useRef(null);
 
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: apiKey || "",
   });
 
+  const markersSignature = useMemo(
+    () =>
+      markers
+        .map((marker) => `${marker.id}:${marker.position?.lat}:${marker.position?.lng}:${marker.label || ""}`)
+        .join("|"),
+    [markers],
+  );
+
+  const routeSegmentsSignature = useMemo(
+    () =>
+      routeSegments
+        .map(
+          (segment) =>
+            `${segment.start?.lat}:${segment.start?.lng}:${segment.end?.lat}:${segment.end?.lng}:${segment.status}`,
+        )
+        .join("|"),
+    [routeSegments],
+  );
+
   const handleMapClick = (e) => {
     if (onClick && e.latLng) {
       onClick({ lat: e.latLng.lat(), lng: e.latLng.lng() });
     }
   };
+
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current) return;
+
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!googleMaps) return;
+
+    if (fitToData) {
+      const bounds = new googleMaps.LatLngBounds();
+      let pointsCount = 0;
+
+      markers.forEach((marker) => {
+        if (!marker.position) return;
+        bounds.extend(marker.position);
+        pointsCount += 1;
+      });
+
+      routeSegments.forEach((segment) => {
+        if (segment.start) {
+          bounds.extend(segment.start);
+          pointsCount += 1;
+        }
+        if (segment.end) {
+          bounds.extend(segment.end);
+          pointsCount += 1;
+        }
+      });
+
+      if (pointsCount > 1) {
+        map.fitBounds(bounds, 48);
+        return;
+      }
+
+      if (pointsCount === 1) {
+        map.panTo(bounds.getCenter());
+        map.setZoom(Math.max(zoom, 15));
+        return;
+      }
+    }
+
+    if (center) {
+      map.panTo(center);
+      map.setZoom(zoom);
+    }
+  }, [
+    center,
+    fitToData,
+    isLoaded,
+    markersSignature,
+    routeSegmentsSignature,
+    zoom,
+    markers,
+    routeSegments,
+  ]);
 
   if (!apiKey) {
     return (
@@ -90,20 +167,24 @@ export default function GoogleMapView({
       zoom={zoom}
       onClick={handleMapClick}
       options={MAP_OPTIONS}
+      onLoad={(map) => {
+        mapRef.current = map;
+      }}
     >
       {routeSegments.map((segment, index) => (
-        <Polyline
-          key={`seg-${index}`}
+        <PolylineF
+          key={`seg-${segment.start?.lat}-${segment.start?.lng}-${segment.end?.lat}-${segment.end?.lng}-${segment.status}-${index}`}
           path={[segment.start, segment.end]}
           options={getPolylineOptions(segment.status)}
         />
       ))}
       {markers.map((marker) => (
-        <Marker
-          key={marker.id}
+        <MarkerF
+          key={`${marker.id}-${marker.position?.lat}-${marker.position?.lng}-${marker.label || ""}`}
           position={marker.position}
           label={marker.label}
           icon={marker.icon}
+          title={marker.title}
           onClick={marker.onClick}
         />
       ))}

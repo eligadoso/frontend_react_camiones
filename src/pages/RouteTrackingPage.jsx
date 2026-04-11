@@ -14,7 +14,15 @@ import GoogleMapView from "../components/GoogleMapView";
 function parseCoords(cordenadas) {
   if (!cordenadas) return null;
   try {
-    if (typeof cordenadas === "object") return cordenadas;
+    if (typeof cordenadas === "object") {
+      if (Array.isArray(cordenadas) && cordenadas.length === 2) {
+        return { lat: Number(cordenadas[0]), lng: Number(cordenadas[1]) };
+      }
+      if ("lat" in cordenadas && "lng" in cordenadas) return cordenadas;
+      if ("latitude" in cordenadas && "longitude" in cordenadas) {
+        return { lat: Number(cordenadas.latitude), lng: Number(cordenadas.longitude) };
+      }
+    }
     const str = String(cordenadas).trim();
     const parts = str.split(",").map((s) => parseFloat(s.trim()));
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
@@ -32,6 +40,17 @@ const getStatusConfig = (estado) => {
   if (estado === "en_punto" || estado === "in_progress")
     return { segLabel: "in_progress", cls: "bg-amber-100 text-amber-700" };
   return { segLabel: "pending", cls: "bg-gray-100 text-gray-500" };
+};
+
+const isCompletedStatus = (estado) => estado === "pasado" || estado === "completed";
+const isInProgressStatus = (estado) => estado === "en_punto" || estado === "in_progress";
+
+const getSegmentStatus = (currentPoint, nextPoint) => {
+  if (!currentPoint || !nextPoint) return "pending";
+  if (isCompletedStatus(nextPoint.status)) return "completed";
+  if (isInProgressStatus(nextPoint.status)) return "in_progress";
+  if (isCompletedStatus(currentPoint.status) && nextPoint.status === "pendiente") return "in_progress";
+  return "pending";
 };
 
 export function RouteTrackingPage() {
@@ -87,14 +106,14 @@ export function RouteTrackingPage() {
       return;
     }
     const load = () => {
-      getSeguimientoRuta(selectedRuta.id_ruta, selectedCamionId)
+      getSeguimientoRuta(selectedRuta.id_ruta, selectedCamionId, selectedAsignacionId)
         .then((r) => setSeguimiento(r.data || r || null))
         .catch(() => undefined);
     };
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [selectedRuta, selectedCamionId]);
+  }, [selectedRuta, selectedCamionId, selectedAsignacionId]);
 
   // ── Crear nuevo recorrido ──────────────────────────────────────
   const onCrearRecorrido = async () => {
@@ -149,7 +168,7 @@ export function RouteTrackingPage() {
     return {
       start: p.coords,
       end: next.coords,
-      status: getStatusConfig(p.status).segLabel,
+      status: getSegmentStatus(p, next),
     };
   });
 
@@ -266,10 +285,12 @@ export function RouteTrackingPage() {
           </div>
           <div className="flex-1 relative min-h-[500px]">
             <GoogleMapView
+              key={`${selectedRuta?.id_ruta || "sin-ruta"}-${selectedCamionId || "sin-camion"}-${selectedAsignacionId || "actual"}`}
               center={center}
               zoom={13}
               markers={mapMarkers}
               routeSegments={routeSegments}
+              fitToData
             />
           </div>
         </motion.div>

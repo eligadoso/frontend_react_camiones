@@ -5,6 +5,10 @@ export function getCamiones() {
   return requestJson(`${env.pythonApiUrl}/camiones`);
 }
 
+export function getCamion(idCamion) {
+  return requestJson(`${env.pythonApiUrl}/camiones/${idCamion}`);
+}
+
 export function createCamion(payload) {
   return requestJson(`${env.pythonApiUrl}/camiones`, {
     method: "POST",
@@ -25,8 +29,25 @@ export function deleteCamion(idCamion) {
   });
 }
 
+export function asignarConductorACamion(idCamion, idConductor) {
+  return requestJson(`${env.pythonApiUrl}/camiones/${idCamion}/asignar-conductor`, {
+    method: "PUT",
+    body: JSON.stringify({ id_conductor: idConductor }),
+  });
+}
+
+export function desasignarConductorDeCamion(idCamion) {
+  return requestJson(`${env.pythonApiUrl}/camiones/${idCamion}/asignar-conductor`, {
+    method: "DELETE",
+  });
+}
+
 export function getConductores() {
   return requestJson(`${env.pythonApiUrl}/conductores`);
+}
+
+export function getConductor(idConductor) {
+  return requestJson(`${env.pythonApiUrl}/conductores/${idConductor}`);
 }
 
 export function createConductor(payload) {
@@ -45,6 +66,19 @@ export function updateConductor(idConductor, payload) {
 
 export function deleteConductor(idConductor) {
   return requestJson(`${env.pythonApiUrl}/conductores/${idConductor}`, {
+    method: "DELETE",
+  });
+}
+
+export function asignarCamionAConductor(idConductor, idCamion) {
+  return requestJson(`${env.pythonApiUrl}/conductores/${idConductor}/asignar-camion`, {
+    method: "PUT",
+    body: JSON.stringify({ id_camion: idCamion }),
+  });
+}
+
+export function desasignarCamionDeConductor(idConductor) {
+  return requestJson(`${env.pythonApiUrl}/conductores/${idConductor}/asignar-camion`, {
     method: "DELETE",
   });
 }
@@ -170,8 +204,11 @@ export function getRutaAsignaciones(idRuta) {
   return requestJson(`${env.pythonApiUrl}/seguimiento-rutas/asignaciones${suffix}`);
 }
 
-export function getSeguimientoRuta(idRuta, idCamion) {
+export function getSeguimientoRuta(idRuta, idCamion, idAsignacionRuta) {
   const params = new URLSearchParams({ id_ruta: idRuta, id_camion: idCamion });
+  if (idAsignacionRuta) {
+    params.set("id_asignacion_ruta", idAsignacionRuta);
+  }
   return requestJson(`${env.pythonApiUrl}/seguimiento-rutas?${params.toString()}`);
 }
 
@@ -190,4 +227,8 @@ export function getDashboardSummary() {
 
 export function getDashboardMovimientos() {
   return requestJson(`${env.pythonApiUrl}/dashboard/movimientos`);
+}
+
+export function getDashboardUbicacionTiempoReal() {
+  return requestJson(`${env.pythonApiUrl}/dashboard/ubicacion-tiempo-real`);
 }

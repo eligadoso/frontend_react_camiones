@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Truck, Clock, Activity, MapPin, Navigation, TrendingUp } from "lucide-react";
-import { getDashboardSummary, getDashboardMovimientos } from "../api/operationsApi";
+import {
+  getDashboardMovimientos,
+  getDashboardSummary,
+  getDashboardUbicacionTiempoReal,
+} from "../api/operationsApi";
 import GoogleMapView from "../components/GoogleMapView";
 
 export function HomePage() {
@@ -11,26 +15,49 @@ export function HomePage() {
     tiempo_promedio_estadia_min: 0,
   });
   const [movements, setMovements] = useState([]);
+  const [realtimeMarkers, setRealtimeMarkers] = useState([]);
 
   useEffect(() => {
-    getDashboardSummary()
-      .then((result) => {
-        if (result && typeof result === "object") {
-          setSummary(result.data || result);
-        }
-      })
-      .catch(() => undefined);
+    const loadDashboard = () => {
+      getDashboardSummary()
+        .then((result) => {
+          if (result && typeof result === "object") {
+            setSummary(result.data || result);
+          }
+        })
+        .catch(() => undefined);
 
-    getDashboardMovimientos()
-      .then((result) => {
-        if (result) {
-          setMovements(result.data || result || []);
-        }
-      })
-      .catch(() => undefined);
+      getDashboardMovimientos()
+        .then((result) => {
+          if (result) {
+            setMovements(result.data || result || []);
+          }
+        })
+        .catch(() => undefined);
+
+      getDashboardUbicacionTiempoReal()
+        .then((result) => {
+          setRealtimeMarkers(result?.data || result || []);
+        })
+        .catch(() => undefined);
+    };
+
+    loadDashboard();
+    const interval = setInterval(loadDashboard, 15000);
+    return () => clearInterval(interval);
   }, []);
 
-  const center = { lat: -33.4489, lng: -70.6693 };
+  const mapMarkers = realtimeMarkers
+    .filter((item) => item.cordenadas?.lat != null && item.cordenadas?.lng != null)
+    .map((item) => ({
+      id: item.id_camion,
+      position: item.cordenadas,
+      label: `${item.punto_control || "Punto"} · ${item.conductor || "-"}`,
+      title: `${item.patente} · ${item.punto_control || "Sin punto"} · ${item.conductor || "-"}`,
+      icon: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+    }));
+
+  const center = mapMarkers[0]?.position || { lat: -33.4489, lng: -70.6693 };
 
   return (
     <div className="size-full flex flex-col bg-gray-50">
@@ -152,7 +179,7 @@ export function HomePage() {
             </div>
           </div>
           <div className="flex-1 relative min-h-[400px]">
-            <GoogleMapView center={center} zoom={13} markers={[]} />
+            <GoogleMapView center={center} zoom={13} markers={mapMarkers} fitToData />
           </div>
         </motion.div>
 

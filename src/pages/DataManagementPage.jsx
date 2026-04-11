@@ -25,6 +25,8 @@ import {
   getCamiones,
   getConductores,
   getTags,
+  asignarCamionAConductor,
+  asignarConductorACamion,
   createCamion,
   updateCamion,
   createConductor,
@@ -33,6 +35,8 @@ import {
   deleteTag,
   deleteCamion,
   deleteConductor,
+  desasignarCamionDeConductor,
+  desasignarConductorDeCamion,
   asignarConductorATag,
   desasignarConductorDeTag,
   getPuntosControl,
@@ -54,7 +58,15 @@ import GoogleMapView from "../components/GoogleMapView";
 function parseCoords(cordenadas) {
   if (!cordenadas) return null;
   try {
-    if (typeof cordenadas === "object") return cordenadas;
+    if (typeof cordenadas === "object") {
+      if (Array.isArray(cordenadas) && cordenadas.length === 2) {
+        return { lat: Number(cordenadas[0]), lng: Number(cordenadas[1]) };
+      }
+      if ("lat" in cordenadas && "lng" in cordenadas) return cordenadas;
+      if ("latitude" in cordenadas && "longitude" in cordenadas) {
+        return { lat: Number(cordenadas.latitude), lng: Number(cordenadas.longitude) };
+      }
+    }
     const parts = String(cordenadas).split(",").map((s) => parseFloat(s.trim()));
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]))
       return { lat: parts[0], lng: parts[1] };
@@ -66,27 +78,76 @@ function coordsToString(c) {
   return c ? `${c.lat},${c.lng}` : "";
 }
 
+function getErrorMessage(error, fallback) {
+  if (error instanceof Error && error.message) {
+    try {
+      const parsed = JSON.parse(error.message);
+      return parsed?.detail || fallback;
+    } catch {
+      return error.message || fallback;
+    }
+  }
+  return fallback;
+}
+
 // ── Conductores ────────────────────────────────────────────────────────────
 function DriversTab({ searchTerm }) {
   const [drivers, setDrivers] = useState([]);
   const [tags, setTags] = useState([]);
+  const [trucks, setTrucks] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editDriver, setEditDriver] = useState(null);
   const [assigningDriver, setAssigningDriver] = useState(null); // driver to assign tag to
+  const [assigningTruckDriver, setAssigningTruckDriver] = useState(null);
   const [selectedTagId, setSelectedTagId] = useState("");
+  const [selectedTruckId, setSelectedTruckId] = useState("");
   const [form, setForm] = useState({ rut: "", nombre: "", apellido: "", telefono: "", licencia: "" });
   const [status, setStatus] = useState("");
 
   const load = () => {
     getConductores().then((r) => setDrivers(r.data || r || [])).catch(() => undefined);
     getTags().then((r) => setTags(r.data || r || [])).catch(() => undefined);
+    getCamiones().then((r) => setTrucks(r.data || r || [])).catch(() => undefined);
   };
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditDriver(null); setForm({ rut: "", nombre: "", apellido: "", telefono: "", licencia: "" }); setShowForm(true); setAssigningDriver(null); setStatus(""); };
-  const openEdit = (d) => { setEditDriver(d); setForm({ rut: d.rut || "", nombre: d.nombre || "", apellido: d.apellido || "", telefono: d.telefono || "", licencia: d.licencia || "" }); setShowForm(true); setAssigningDriver(null); setStatus(""); };
-  const openAssign = (d) => { setAssigningDriver(d); setSelectedTagId(""); setShowForm(false); setStatus(""); };
-  const closeAll = () => { setShowForm(false); setEditDriver(null); setAssigningDriver(null); setStatus(""); };
+  const openCreate = () => {
+    setEditDriver(null);
+    setForm({ rut: "", nombre: "", apellido: "", telefono: "", licencia: "" });
+    setShowForm(true);
+    setAssigningDriver(null);
+    setAssigningTruckDriver(null);
+    setStatus("");
+  };
+  const openEdit = (d) => {
+    setEditDriver(d);
+    setForm({ rut: d.rut || "", nombre: d.nombre || "", apellido: d.apellido || "", telefono: d.telefono || "", licencia: d.licencia || "" });
+    setShowForm(true);
+    setAssigningDriver(null);
+    setAssigningTruckDriver(null);
+    setStatus("");
+  };
+  const openAssign = (d) => {
+    setAssigningDriver(d);
+    setSelectedTagId("");
+    setShowForm(false);
+    setAssigningTruckDriver(null);
+    setStatus("");
+  };
+  const openAssignTruck = (d) => {
+    setAssigningTruckDriver(d);
+    setSelectedTruckId(d.camion?.id_camion || d.id_camion || "");
+    setShowForm(false);
+    setAssigningDriver(null);
+    setStatus("");
+  };
+  const closeAll = () => {
+    setShowForm(false);
+    setEditDriver(null);
+    setAssigningDriver(null);
+    setAssigningTruckDriver(null);
+    setStatus("");
+  };
 
   const onSave = async () => {
     try {
@@ -99,11 +160,11 @@ function DriversTab({ searchTerm }) {
       }
       closeAll();
       load();
-    } catch { setStatus("Error al guardar conductor"); }
+    } catch (error) { setStatus(getErrorMessage(error, "Error al guardar conductor")); }
   };
 
   const onDelete = async (id) => {
-    try { await deleteConductor(id); load(); } catch { setStatus("Error al eliminar"); }
+    try { await deleteConductor(id); load(); } catch (error) { setStatus(getErrorMessage(error, "Error al eliminar")); }
   };
 
   const onAssignTag = async () => {
@@ -114,7 +175,7 @@ function DriversTab({ searchTerm }) {
       setAssigningDriver(null);
       load();
     } catch (e) {
-      setStatus(e?.response?.data?.detail || "Error al asignar tag");
+      setStatus(getErrorMessage(e, "Error al asignar tag"));
     }
   };
 
@@ -123,12 +184,40 @@ function DriversTab({ searchTerm }) {
     const tag = tags.find((t) => t.id_conductor === driver.id_conductor);
     if (!tag) return;
     try { await desasignarConductorDeTag(tag.id_tag); load(); }
-    catch { setStatus("Error al desasignar tag"); }
+    catch (error) { setStatus(getErrorMessage(error, "Error al desasignar tag")); }
+  };
+
+  const onAssignTruck = async () => {
+    if (!assigningTruckDriver || !selectedTruckId) return;
+    try {
+      await asignarCamionAConductor(assigningTruckDriver.id_conductor, selectedTruckId);
+      setStatus("Camión asignado correctamente");
+      setAssigningTruckDriver(null);
+      load();
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Error al asignar camión"));
+    }
+  };
+
+  const onUnassignTruck = async (driver) => {
+    try {
+      await desasignarCamionDeConductor(driver.id_conductor);
+      load();
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Error al desasignar camión"));
+    }
   };
 
   // Unassigned tags + the tag currently assigned to the conductor being assigned
   const availableTags = tags.filter(
     (t) => !t.id_conductor || (assigningDriver && t.id_conductor === assigningDriver.id_conductor)
+  );
+
+  const availableTrucks = trucks.filter(
+    (truck) =>
+      !truck.id_conductor ||
+      (assigningTruckDriver && truck.id_conductor === assigningTruckDriver.id_conductor) ||
+      (assigningTruckDriver && truck.id_camion === assigningTruckDriver.camion?.id_camion)
   );
 
   const filtered = drivers.filter(
@@ -211,10 +300,59 @@ function DriversTab({ searchTerm }) {
         </motion.div>
       )}
 
+      {assigningTruckDriver && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl border border-emerald-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Truck className="size-4 text-emerald-500" />
+                Asignar Camión a: {assigningTruckDriver.nombre} {assigningTruckDriver.apellido}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Solo se muestran camiones sin chofer asignado</p>
+            </div>
+            <button onClick={() => setAssigningTruckDriver(null)}><X className="size-4 text-gray-400 hover:text-gray-600" /></button>
+          </div>
+
+          {assigningTruckDriver.camion && (
+            <div className="mb-4 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+              <Truck className="size-4 text-green-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">Camión actual: {assigningTruckDriver.camion.patente}</p>
+                <p className="text-xs text-green-700">
+                  {[assigningTruckDriver.camion.marca, assigningTruckDriver.camion.modelo].filter(Boolean).join(" ")}
+                </p>
+              </div>
+              <button onClick={() => onUnassignTruck(assigningTruckDriver)} className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors flex items-center gap-1">
+                <Unlink className="size-3" />Quitar
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <select value={selectedTruckId} onChange={(e) => setSelectedTruckId(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Seleccionar camión...</option>
+              {availableTrucks.map((truck) => (
+                <option key={truck.id_camion} value={truck.id_camion}>
+                  {truck.patente}{truck.marca ? ` — ${truck.marca}` : ""}
+                </option>
+              ))}
+            </select>
+            <button onClick={onAssignTruck} disabled={!selectedTruckId} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+              <Link className="size-4" />Asignar
+            </button>
+          </div>
+          {availableTrucks.length === 0 && (
+            <p className="text-xs text-amber-600 mt-2 bg-amber-50 px-3 py-2 rounded-lg">No hay camiones disponibles sin asignar.</p>
+          )}
+          {status && <p className="text-xs text-gray-600 mt-3">{status}</p>}
+        </motion.div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>{["Nombre", "RUT", "Teléfono", "Licencia", "Tag RFID", "Acciones"].map((h) => (
+            <tr>{["Nombre", "RUT", "Teléfono", "Licencia", "Tag RFID", "Camión", "Acciones"].map((h) => (
               <th key={h} className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${h === "Acciones" ? "text-right" : "text-left"}`}>{h}</th>
             ))}</tr>
           </thead>
@@ -240,10 +378,17 @@ function DriversTab({ searchTerm }) {
                     : <span className="text-xs text-gray-400">Sin tarjeta</span>
                   }
                 </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {d.camion
+                    ? <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"><Truck className="size-3" />{d.camion.patente}</span>
+                    : <span className="text-xs text-gray-400">Sin camión</span>
+                  }
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="flex items-center justify-end gap-1">
                     <button onClick={() => openEdit(d)} title="Editar" className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="size-4" /></button>
                     <button onClick={() => openAssign(d)} title="Asignar tag" className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"><Tag className="size-4" /></button>
+                    <button onClick={() => openAssignTruck(d)} title="Asignar camión" className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Truck className="size-4" /></button>
                     <button onClick={() => onDelete(d.id_conductor)} title="Eliminar" className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="size-4" /></button>
                   </div>
                 </td>
@@ -260,17 +405,24 @@ function DriversTab({ searchTerm }) {
 // ── Camiones ───────────────────────────────────────────────────────────────
 function TrucksTab({ searchTerm }) {
   const [trucks, setTrucks] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editTruck, setEditTruck] = useState(null);
+  const [assigningDriver, setAssigningDriver] = useState(null);
+  const [selectedDriverId, setSelectedDriverId] = useState("");
   const [form, setForm] = useState({ patente: "", id_empresa: 1, marca: "", modelo: "", color: "" });
   const [status, setStatus] = useState("");
 
-  const load = () => getCamiones().then((r) => setTrucks(r.data || r || [])).catch(() => undefined);
+  const load = () => {
+    getCamiones().then((r) => setTrucks(r.data || r || [])).catch(() => undefined);
+    getConductores().then((r) => setDrivers(r.data || r || [])).catch(() => undefined);
+  };
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditTruck(null); setForm({ patente: "", id_empresa: 1, marca: "", modelo: "", color: "" }); setShowForm(true); setStatus(""); };
-  const openEdit = (t) => { setEditTruck(t); setForm({ patente: t.patente || "", id_empresa: t.id_empresa || 1, marca: t.marca || "", modelo: t.modelo || "", color: t.color || "" }); setShowForm(true); setStatus(""); };
-  const cancel = () => { setShowForm(false); setEditTruck(null); setStatus(""); };
+  const openCreate = () => { setEditTruck(null); setForm({ patente: "", id_empresa: 1, marca: "", modelo: "", color: "" }); setShowForm(true); setAssigningDriver(null); setStatus(""); };
+  const openEdit = (t) => { setEditTruck(t); setForm({ patente: t.patente || "", id_empresa: t.id_empresa || 1, marca: t.marca || "", modelo: t.modelo || "", color: t.color || "" }); setShowForm(true); setAssigningDriver(null); setStatus(""); };
+  const openAssignDriver = (truck) => { setAssigningDriver(truck); setSelectedDriverId(truck.conductor?.id_conductor || truck.id_conductor || ""); setShowForm(false); setStatus(""); };
+  const cancel = () => { setShowForm(false); setEditTruck(null); setAssigningDriver(null); setStatus(""); };
 
   const onSave = async () => {
     try {
@@ -281,12 +433,40 @@ function TrucksTab({ searchTerm }) {
       }
       cancel();
       load();
-    } catch { setStatus("Error al guardar camión"); }
+    } catch (error) { setStatus(getErrorMessage(error, "Error al guardar camión")); }
   };
 
   const onDelete = async (id) => {
-    try { await deleteCamion(id); load(); } catch { setStatus("Error al eliminar"); }
+    try { await deleteCamion(id); load(); } catch (error) { setStatus(getErrorMessage(error, "Error al eliminar")); }
   };
+
+  const onAssignDriver = async () => {
+    if (!assigningDriver || !selectedDriverId) return;
+    try {
+      await asignarConductorACamion(assigningDriver.id_camion, selectedDriverId);
+      setStatus("Chofer asignado correctamente");
+      setAssigningDriver(null);
+      load();
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Error al asignar chofer"));
+    }
+  };
+
+  const onUnassignDriver = async (truck) => {
+    try {
+      await desasignarConductorDeCamion(truck.id_camion);
+      load();
+    } catch (error) {
+      setStatus(getErrorMessage(error, "Error al desasignar chofer"));
+    }
+  };
+
+  const availableDrivers = drivers.filter(
+    (driver) =>
+      !driver.id_camion ||
+      (assigningDriver && driver.id_camion === assigningDriver.id_camion) ||
+      (assigningDriver && driver.id_conductor === assigningDriver.conductor?.id_conductor)
+  );
 
   const filtered = trucks.filter(
     (t) => !searchTerm || t.patente?.toLowerCase().includes(searchTerm.toLowerCase()) || t.marca?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -328,7 +508,7 @@ function TrucksTab({ searchTerm }) {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>{["Patente", "Marca", "Modelo", "Color", "Estado", "Acciones"].map((h) => (
+            <tr>{["Patente", "Marca", "Modelo", "Color", "Chofer", "Estado", "Acciones"].map((h) => (
               <th key={h} className={`px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${h === "Acciones" ? "text-right" : "text-left"}`}>{h}</th>
             ))}</tr>
           </thead>
@@ -345,6 +525,12 @@ function TrucksTab({ searchTerm }) {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{t.modelo || "-"}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{t.color || "-"}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
+                  {t.conductor
+                    ? <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"><Users className="size-3" />{t.conductor.nombre} {t.conductor.apellido}</span>
+                    : <span className="text-xs text-gray-400">Sin chofer</span>
+                  }
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${t.estado === "activo" || t.estado == null ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}>
                     {t.estado === "activo" || t.estado == null ? <CheckCircle className="size-3" /> : <XCircle className="size-3" />}
                     {t.estado || "activo"}
@@ -353,6 +539,7 @@ function TrucksTab({ searchTerm }) {
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="flex items-center justify-end gap-1">
                     <button onClick={() => openEdit(t)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="size-4" /></button>
+                    <button onClick={() => openAssignDriver(t)} className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Users className="size-4" /></button>
                     <button onClick={() => onDelete(t.id_camion)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="size-4" /></button>
                   </div>
                 </td>
@@ -362,6 +549,55 @@ function TrucksTab({ searchTerm }) {
         </table>
         {filtered.length === 0 && <div className="p-8 text-center text-sm text-gray-400">Sin camiones registrados</div>}
       </div>
+
+      {assigningDriver && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl border border-emerald-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Users className="size-4 text-emerald-500" />
+                Asignar Chofer al Camión: <span className="font-mono text-emerald-700">{assigningDriver.patente}</span>
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Solo se muestran choferes sin camión asignado</p>
+            </div>
+            <button onClick={() => setAssigningDriver(null)}><X className="size-4 text-gray-400 hover:text-gray-600" /></button>
+          </div>
+
+          {assigningDriver.conductor && (
+            <div className="mb-4 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+              <Users className="size-4 text-green-600 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-900">
+                  Chofer actual: {assigningDriver.conductor.nombre} {assigningDriver.conductor.apellido}
+                </p>
+                <p className="text-xs text-green-700">{assigningDriver.conductor.rut}</p>
+              </div>
+              <button onClick={() => onUnassignDriver(assigningDriver)} className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors flex items-center gap-1">
+                <Unlink className="size-3" />Quitar
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <select value={selectedDriverId} onChange={(e) => setSelectedDriverId(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Seleccionar chofer...</option>
+              {availableDrivers.map((driver) => (
+                <option key={driver.id_conductor} value={driver.id_conductor}>
+                  {driver.nombre} {driver.apellido}{driver.rut ? ` — ${driver.rut}` : ""}
+                </option>
+              ))}
+            </select>
+            <button onClick={onAssignDriver} disabled={!selectedDriverId} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+              <Link className="size-4" />Asignar
+            </button>
+          </div>
+          {availableDrivers.length === 0 && (
+            <p className="text-xs text-amber-600 mt-2 bg-amber-50 px-3 py-2 rounded-lg">No hay choferes disponibles sin asignar.</p>
+          )}
+          {status && <p className="text-xs text-gray-600 mt-3">{status}</p>}
+        </motion.div>
+      )}
     </div>
   );
 }
@@ -388,11 +624,11 @@ function RfidTab({ searchTerm }) {
   const onUpdateTag = async () => {
     if (!editTag) return;
     try { await updateTag(editTag.id_tag, tagForm); setEditTag(null); load(); }
-    catch { setStatus("Error al actualizar tag"); }
+    catch (error) { setStatus(getErrorMessage(error, "Error al actualizar tag")); }
   };
 
   const onDeleteTag = async (id) => {
-    try { await deleteTag(id); load(); } catch { setStatus("Error al eliminar tag"); }
+    try { await deleteTag(id); load(); } catch (error) { setStatus(getErrorMessage(error, "Error al eliminar tag")); }
   };
 
   const onAssignDriver = async () => {
@@ -403,13 +639,13 @@ function RfidTab({ searchTerm }) {
       setAssigningTag(null);
       load();
     } catch (e) {
-      setStatus(e?.response?.data?.detail || "Error al asignar conductor");
+      setStatus(getErrorMessage(e, "Error al asignar conductor"));
     }
   };
 
   const onUnassign = async (tag) => {
     try { await desasignarConductorDeTag(tag.id_tag); load(); }
-    catch { setStatus("Error al desasignar"); }
+    catch (error) { setStatus(getErrorMessage(error, "Error al desasignar")); }
   };
 
   // Conductors with no tag, or the one already assigned to this tag
@@ -569,13 +805,13 @@ function TiposPuntoSection() {
       cancel();
       load();
     } catch (e) {
-      setStatus(e?.response?.data?.detail || "Error al guardar");
+      setStatus(getErrorMessage(e, "Error al guardar"));
     }
   };
 
   const onDelete = async (id) => {
     try { await deleteTipoPuntoControl(id); load(); }
-    catch { setStatus("Error al eliminar tipo"); }
+    catch (error) { setStatus(getErrorMessage(error, "Error al eliminar tipo")); }
   };
 
   return (
@@ -635,7 +871,7 @@ function TiposPuntoSection() {
 }
 
 // ── Puntos de Control ──────────────────────────────────────────────────────
-const emptyPcForm = { nombre: "", ubicacion: "", id_zona: "", tipo_punto: "", id_esp32: "", coords: null };
+const emptyPcForm = { nombre: "", ubicacion: "", id_zona: "", tipo_punto: "", id_esp32: "", coords: null, activo: true };
 
 function PuntosControlTab({ searchTerm }) {
   const [checkpoints, setCheckpoints] = useState([]);
@@ -651,9 +887,9 @@ function PuntosControlTab({ searchTerm }) {
   };
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setForm({ ...emptyPcForm, tipo_punto: tipos[0]?.nombre || "checkpoint" }); setSelectedId(null); setMode("create"); setStatus(""); };
+  const openCreate = () => { setForm({ ...emptyPcForm, tipo_punto: tipos[0]?.nombre || "checkpoint", activo: true }); setSelectedId(null); setMode("create"); setStatus(""); };
   const openEdit = (cp) => {
-    setForm({ nombre: cp.nombre || "", ubicacion: cp.ubicacion || "", id_zona: cp.id_zona || "", tipo_punto: cp.tipo_punto || "checkpoint", id_esp32: cp.id_esp32 || "", coords: parseCoords(cp.cordenadas) });
+    setForm({ nombre: cp.nombre || "", ubicacion: cp.ubicacion || "", id_zona: cp.id_zona || "", tipo_punto: cp.tipo_punto || "checkpoint", id_esp32: cp.id_esp32 || "", coords: parseCoords(cp.cordenadas), activo: cp.activo !== false });
     setSelectedId(cp.id_punto_control);
     setMode("edit");
     setStatus("");
@@ -666,18 +902,18 @@ function PuntosControlTab({ searchTerm }) {
 
   const onSave = async () => {
     if (!form.nombre || !form.id_esp32) return;
-    const payload = { nombre: form.nombre, ubicacion: form.ubicacion || null, cordenadas: coordsToString(form.coords) || null, id_zona: form.id_zona || null, tipo_punto: form.tipo_punto, id_esp32: form.id_esp32 };
+    const payload = { nombre: form.nombre, ubicacion: form.ubicacion || null, cordenadas: coordsToString(form.coords) || null, id_zona: form.id_zona || null, tipo_punto: form.tipo_punto, id_esp32: form.id_esp32, activo: form.activo };
     try {
       if (mode === "create") { await createPuntoControl(payload); setStatus("Punto creado"); }
       else { await updatePuntoControl(selectedId, payload); setStatus("Punto actualizado"); }
       cancel();
       load();
-    } catch { setStatus("Error al guardar"); }
+    } catch (error) { setStatus(getErrorMessage(error, "Error al guardar")); }
   };
 
   const onDelete = async (id) => {
     try { await deletePuntoControl(id); load(); if (selectedId === id) cancel(); }
-    catch { setStatus("Error al eliminar"); }
+    catch (error) { setStatus(getErrorMessage(error, "Error al eliminar")); }
   };
 
   const filtered = checkpoints.filter(
@@ -686,22 +922,22 @@ function PuntosControlTab({ searchTerm }) {
 
   const mapMarkers = [
     ...checkpoints.filter((cp) => parseCoords(cp.cordenadas)).map((cp) => ({
-      id: cp.id_punto_control, position: parseCoords(cp.cordenadas), label: cp.nombre || cp.id_punto_control,
+      id: cp.id_punto_control,
+      position: parseCoords(cp.cordenadas),
+      label: cp.nombre || cp.id_punto_control,
+      title: `${cp.nombre || cp.id_punto_control}${cp.ubicacion ? ` · ${cp.ubicacion}` : ""}`,
+      onClick: () => {
+        if (mode === "view") setSelectedId(cp.id_punto_control);
+      },
     })),
     ...(form.coords && mode !== "view" ? [{ id: "__draft__", position: form.coords, label: form.nombre || "Nuevo", icon: "http://maps.google.com/mapfiles/ms/icons/red-dot.png" }] : []),
   ];
 
-  const routeSegments = checkpoints
-    .filter((cp) => parseCoords(cp.cordenadas))
-    .slice(0, -1)
-    .map((cp, i, arr) => ({
-      start: parseCoords(cp.cordenadas),
-      end: parseCoords(arr[i + 1].cordenadas),
-      status: "pending",
-    }));
+  const routeSegments = [];
 
   const validCps = checkpoints.filter((cp) => parseCoords(cp.cordenadas));
   const center = (validCps[0] && parseCoords(validCps[0].cordenadas)) || { lat: -33.4372, lng: -70.6506 };
+  const selectedCheckpoint = checkpoints.find((cp) => cp.id_punto_control === selectedId);
 
   return (
     <div className="space-y-6">
@@ -718,12 +954,54 @@ function PuntosControlTab({ searchTerm }) {
             </button>
           </div>
           <div className="flex-1">
-            <GoogleMapView center={center} zoom={12} markers={mapMarkers} routeSegments={routeSegments} onClick={handleMapClick} />
+            <GoogleMapView
+              key={`pc-map-${mode}-${selectedId || "none"}-${mapMarkers.length}`}
+              center={center}
+              zoom={12}
+              markers={mapMarkers}
+              routeSegments={routeSegments}
+              onClick={handleMapClick}
+              fitToData={mode === "view"}
+            />
           </div>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4 overflow-auto">
+          {mode === "view" && selectedCheckpoint && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">{selectedCheckpoint.nombre || selectedCheckpoint.id_punto_control}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">{selectedCheckpoint.ubicacion || "Sin ubicación descriptiva"}</p>
+                  </div>
+                  <span className={`text-[11px] rounded-full px-2 py-1 ${selectedCheckpoint.activo !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                    {selectedCheckpoint.activo !== false ? "Activo" : "Inactivo"}
+                  </span>
+                </div>
+              </div>
+              <div className="p-4 space-y-3 text-xs">
+                <div>
+                  <div className="font-medium text-gray-500 mb-1">Tipo</div>
+                  <div className="text-gray-900">{selectedCheckpoint.tipo_punto || "checkpoint"}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-500 mb-1">ESP32</div>
+                  <div className="text-gray-900">{selectedCheckpoint.id_esp32 || "-"}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-500 mb-1">Zona</div>
+                  <div className="text-gray-900">{selectedCheckpoint.id_zona || "-"}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-500 mb-1">Coordenadas</div>
+                  <div className="font-mono text-gray-900">{selectedCheckpoint.cordenadas || "Sin coordenadas"}</div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {mode !== "view" && (
             <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-4 py-3 bg-blue-50 border-b border-blue-100">
@@ -748,6 +1026,15 @@ function PuntosControlTab({ searchTerm }) {
                     {tipos.map((t) => <option key={t.id_tipo} value={t.nombre}>{t.nombre}{t.descripcion ? ` — ${t.descripcion}` : ""}</option>)}
                     {tipos.length === 0 && <option value="checkpoint">checkpoint</option>}
                   </select>
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+                  <div>
+                    <div className="text-xs font-medium text-gray-700">Activo</div>
+                    <div className="text-[11px] text-gray-500">Disponible para rutas y monitoreo</div>
+                  </div>
+                  <button onClick={() => setForm((current) => ({ ...current, activo: !current.activo }))} className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${form.activo ? "bg-blue-600" : "bg-gray-300"}`}>
+                    <span className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${form.activo ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </button>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">Coordenadas</label>
@@ -775,7 +1062,7 @@ function PuntosControlTab({ searchTerm }) {
               {filtered.length === 0
                 ? <div className="p-6 text-center text-sm text-gray-400">Sin puntos registrados</div>
                 : filtered.map((cp) => (
-                  <div key={cp.id_punto_control} className={`p-3 flex items-start justify-between gap-2 hover:bg-gray-50 ${selectedId === cp.id_punto_control ? "bg-blue-50" : ""}`}>
+                  <div key={cp.id_punto_control} onClick={() => setSelectedId(cp.id_punto_control)} className={`p-3 flex items-start justify-between gap-2 hover:bg-gray-50 cursor-pointer ${selectedId === cp.id_punto_control ? "bg-blue-50" : ""}`}>
                     <div className="flex items-start gap-2 min-w-0">
                       <MapPin className="size-4 text-gray-400 shrink-0 mt-0.5" />
                       <div className="min-w-0">
@@ -784,12 +1071,15 @@ function PuntosControlTab({ searchTerm }) {
                         <div className="flex items-center gap-2 mt-0.5">
                           {cp.tipo_punto && <span className="text-xs text-blue-600 font-mono">{cp.tipo_punto}</span>}
                           {cp.id_esp32 && <span className="text-xs text-gray-400">{cp.id_esp32}</span>}
+                          <span className={`text-[11px] rounded-full px-2 py-0.5 ${cp.activo !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                            {cp.activo !== false ? "Activo" : "Inactivo"}
+                          </span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => openEdit(cp)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"><Edit className="size-3.5" /></button>
-                      <button onClick={() => onDelete(cp.id_punto_control)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="size-3.5" /></button>
+                      <button onClick={(event) => { event.stopPropagation(); openEdit(cp); }} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"><Edit className="size-3.5" /></button>
+                      <button onClick={(event) => { event.stopPropagation(); onDelete(cp.id_punto_control); }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 className="size-3.5" /></button>
                     </div>
                   </div>
                 ))
@@ -839,12 +1129,12 @@ function RutasTab({ searchTerm }) {
       else { await updateRuta(selectedId, payload); }
       cancel();
       load();
-    } catch { setStatus("Error al guardar ruta"); }
+    } catch (error) { setStatus(getErrorMessage(error, "Error al guardar ruta")); }
   };
 
   const onDelete = async (id) => {
     try { await deleteRuta(id); load(); if (selectedId === id) cancel(); }
-    catch { setStatus("Error al eliminar ruta"); }
+    catch (error) { setStatus(getErrorMessage(error, "Error al eliminar ruta")); }
   };
 
   const addPunto = (idPunto) => {
@@ -875,6 +1165,7 @@ function RutasTab({ searchTerm }) {
     id: p.id_punto_control,
     position: parseCoords(p.cp.cordenadas),
     label: `${p.orden}. ${p.cp.nombre || p.id_punto_control}`,
+    title: `${p.orden}. ${p.cp.nombre || p.id_punto_control}`,
   }));
 
   const routeSegments = formPuntosWithCoords.slice(0, -1).map((p, i) => ({
@@ -883,12 +1174,12 @@ function RutasTab({ searchTerm }) {
     status: "pending",
   }));
 
-  const validCps = checkpoints.filter((cp) => parseCoords(cp.cordenadas));
+  const validCps = checkpoints.filter((cp) => cp.activo !== false && parseCoords(cp.cordenadas));
   const mapCenter = (formPuntosWithCoords[0] && parseCoords(formPuntosWithCoords[0].cp.cordenadas))
     || (validCps[0] && parseCoords(validCps[0].cordenadas))
     || { lat: -33.4372, lng: -70.6506 };
 
-  const availablePuntos = checkpoints.filter((cp) => !form.puntos.find((p) => p.id_punto_control === cp.id_punto_control));
+  const availablePuntos = checkpoints.filter((cp) => cp.activo !== false && !form.puntos.find((p) => p.id_punto_control === cp.id_punto_control));
   const filtered = rutas.filter((r) => !searchTerm || r.nombre?.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
@@ -974,7 +1265,14 @@ function RutasTab({ searchTerm }) {
               </p>
             </div>
             <div className="flex-1">
-              <GoogleMapView center={mapCenter} zoom={12} markers={mapMarkers} routeSegments={routeSegments} />
+              <GoogleMapView
+                key={`ruta-map-${selectedId || mode}-${form.puntos.map((p) => `${p.id_punto_control}:${p.orden}`).join("|")}`}
+                center={mapCenter}
+                zoom={12}
+                markers={mapMarkers}
+                routeSegments={routeSegments}
+                fitToData
+              />
             </div>
           </div>
         </div>

@@ -48,7 +48,7 @@ export function RouteMetricsPage() {
         const data = r.data || r || null;
         setMetricas(data);
         const first = (data?.puntos || [])[0];
-        setSelectedSegmentId(first?.id_punto_control || null);
+        setSelectedSegmentId(first?.id_segmento || first?.id_punto_control || null);
         setStatus("");
       })
       .catch(() => {
@@ -63,9 +63,10 @@ export function RouteMetricsPage() {
   const segments = useMemo(() => {
     if (!metricas?.puntos) return [];
     return metricas.puntos.map((punto) => ({
-      id: punto.id_punto_control,
-      from: `Punto #${punto.transicion_desde_orden ?? "inicio"}`,
-      to: punto.nombre_punto || punto.id_punto_control,
+      id: punto.id_segmento || `${punto.desde?.id_punto_control}-${punto.hasta?.id_punto_control}`,
+      from: punto.desde?.nombre_punto || punto.nombre_punto_anterior || `Punto #${punto.transicion_desde_orden}`,
+      to: punto.hasta?.nombre_punto || punto.nombre_punto || punto.id_punto_control,
+      fromOrder: punto.desde?.orden ?? punto.transicion_desde_orden,
       orden: punto.orden,
       times: (punto.registros || []).map((r) => ({
         truck: r.patente || r.id_camion,
