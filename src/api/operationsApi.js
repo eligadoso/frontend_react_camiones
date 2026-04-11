@@ -12,6 +12,19 @@ export function createCamion(payload) {
   });
 }
 
+export function updateCamion(idCamion, payload) {
+  return requestJson(`${env.pythonApiUrl}/camiones/${idCamion}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteCamion(idCamion) {
+  return requestJson(`${env.pythonApiUrl}/camiones/${idCamion}`, {
+    method: "DELETE",
+  });
+}
+
 export function getConductores() {
   return requestJson(`${env.pythonApiUrl}/conductores`);
 }
@@ -20,6 +33,19 @@ export function createConductor(payload) {
   return requestJson(`${env.pythonApiUrl}/conductores`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function updateConductor(idConductor, payload) {
+  return requestJson(`${env.pythonApiUrl}/conductores/${idConductor}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteConductor(idConductor) {
+  return requestJson(`${env.pythonApiUrl}/conductores/${idConductor}`, {
+    method: "DELETE",
   });
 }
 
@@ -34,6 +60,49 @@ export function updateTag(idTag, payload) {
   });
 }
 
+export function deleteTag(idTag) {
+  return requestJson(`${env.pythonApiUrl}/rfid/tags/${idTag}`, {
+    method: "DELETE",
+  });
+}
+
+export function asignarConductorATag(idTag, idConductor) {
+  return requestJson(`${env.pythonApiUrl}/rfid/tags/${idTag}/asignar-conductor`, {
+    method: "PUT",
+    body: JSON.stringify({ id_conductor: idConductor }),
+  });
+}
+
+export function desasignarConductorDeTag(idTag) {
+  return requestJson(`${env.pythonApiUrl}/rfid/tags/${idTag}/asignar-conductor`, {
+    method: "DELETE",
+  });
+}
+
+export function getTiposPuntoControl() {
+  return requestJson(`${env.pythonApiUrl}/tipos-punto-control`);
+}
+
+export function createTipoPuntoControl(payload) {
+  return requestJson(`${env.pythonApiUrl}/tipos-punto-control`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateTipoPuntoControl(idTipo, payload) {
+  return requestJson(`${env.pythonApiUrl}/tipos-punto-control/${idTipo}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTipoPuntoControl(idTipo) {
+  return requestJson(`${env.pythonApiUrl}/tipos-punto-control/${idTipo}`, {
+    method: "DELETE",
+  });
+}
+
 export function createVinculacion(payload) {
   return requestJson(`${env.pythonApiUrl}/vinculaciones`, {
     method: "POST",
@@ -45,10 +114,23 @@ export function getPuntosControl() {
   return requestJson(`${env.pythonApiUrl}/puntos-control`);
 }
 
+export function createPuntoControl(payload) {
+  return requestJson(`${env.pythonApiUrl}/puntos-control`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function updatePuntoControl(idPuntoControl, payload) {
   return requestJson(`${env.pythonApiUrl}/puntos-control/${idPuntoControl}`, {
     method: "PUT",
     body: JSON.stringify(payload),
+  });
+}
+
+export function deletePuntoControl(idPuntoControl) {
+  return requestJson(`${env.pythonApiUrl}/puntos-control/${idPuntoControl}`, {
+    method: "DELETE",
   });
 }
 
