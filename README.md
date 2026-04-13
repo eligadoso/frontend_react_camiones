@@ -22,3 +22,9 @@
 npm install
 npm run dev
 ```
+
+## Produccion
+
+```bash
+npm start
+```

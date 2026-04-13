@@ -204,6 +204,48 @@ export function getRutaAsignaciones(idRuta) {
   return requestJson(`${env.pythonApiUrl}/seguimiento-rutas/asignaciones${suffix}`);
 }
 
+export function iniciarRecorrido(idAsignacionRuta) {
+  return requestJson(
+    `${env.pythonApiUrl}/seguimiento-rutas/asignaciones/${idAsignacionRuta}/iniciar`,
+    { method: "POST" },
+  );
+}
+
+export function finalizarRecorrido(idAsignacionRuta) {
+  return requestJson(
+    `${env.pythonApiUrl}/seguimiento-rutas/asignaciones/${idAsignacionRuta}/finalizar`,
+    { method: "POST" },
+  );
+}
+
+export function cancelarRecorrido(idAsignacionRuta) {
+  return requestJson(
+    `${env.pythonApiUrl}/seguimiento-rutas/asignaciones/${idAsignacionRuta}/cancelar`,
+    { method: "POST" },
+  );
+}
+
+/** Añade un punto de control al snapshot de un recorrido activo.
+ * @param {string} idAsignacionRuta
+ * @param {{ id_punto_control: string, orden?: number }} payload
+ */
+export function agregarPuntoRecorrido(idAsignacionRuta, payload) {
+  return requestJson(
+    `${env.pythonApiUrl}/seguimiento-rutas/asignaciones/${idAsignacionRuta}/puntos`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+}
+
+/** Sincroniza puntos futuros no interactuados con la ruta maestra actual.
+ * El backend detecta si la operación es segura o ambigua.
+ */
+export function recargarRutaRecorrido(idAsignacionRuta) {
+  return requestJson(
+    `${env.pythonApiUrl}/seguimiento-rutas/asignaciones/${idAsignacionRuta}/recargar-ruta`,
+    { method: "POST" },
+  );
+}
+
 export function getSeguimientoRuta(idRuta, idCamion, idAsignacionRuta) {
   const params = new URLSearchParams({ id_ruta: idRuta, id_camion: idCamion });
   if (idAsignacionRuta) {
